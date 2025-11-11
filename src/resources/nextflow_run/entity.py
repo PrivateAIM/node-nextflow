@@ -1,5 +1,6 @@
 import uuid
 import time
+from typing import Optional
 from pydantic import BaseModel
 
 from src.resources.database.entity import Database
@@ -11,21 +12,18 @@ class NextflowRunEntity:
                  analysis_id: str,
                  pipeline_name: str,
                  run_args: list[str],
-                 run_id: Optional[str],
-                 database: Optional[Database]) -> None:
-        if database is not None:
-            self.run_id = f"nf-run-{uuid.uuid4()}"
-            self.analysis_id = analysis_id
-            self.pipeline_name = pipeline_name
-            self.run_args = run_args
-        else:
-            self.run_id = run_id
-            nf_run = database.get_nf_run_by_run_id(run_id)
-            self.analysis_id = nf_run.analysis_id
-            self.pipeline_name = nf_run.pipeline_name
-            self.run_args = nf_run.run_args
+                 run_id: Optional[str] = None) -> None:
+        self.run_id = f"nf-run-{uuid.uuid4()}" if run_id is None else run_id
+        self.analysis_id = analysis_id
+        self.pipeline_name = pipeline_name
+        self.run_args = run_args
         self.time_created: float = time.time()
         self.time_updated: float = time.time()
+
+    @classmethod
+    def from_database(cls, run_id: str, database: Database) -> 'NextflowRunEntity':
+        nf_run = database.get_nf_run_by_run_id(run_id)
+        return cls(nf_run.analysis_id, nf_run.pipeline_name, nf_run.run_args, run_id=run_id)
 
     def start(self, database: Database) -> None:
         database.create_nf_run(self.run_id, self.analysis_id)

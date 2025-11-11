@@ -66,14 +66,14 @@ class FlameNextflowAPI:
         nf_run.start(self.database)
         return {'status': f"Nextflow run started (id={nf_run.run_id})."}
 
-    def conclude_call(self, body: ConcludeNextflowRun) -> JSONResponse:
-        nf_run = NextflowRunEntity(run_id=body.run_id, database=self.database)
+    def conclude_call(self, body: ConcludeNextflowRun):
+        nf_run = NextflowRunEntity.from_database(run_id=body.run_id, database=self.database)
         nf_run.conclude(body.run_status, body.storage_location)
         return {'status': f"Nextflow run with id={body.run_id} concluded."}
 
     def interrupt_call(self, analysis_id: str):
         for nf_db in self.database.get_nf_runs_by_analysis_id(analysis_id):
-            nf_run = NextflowRunEntity(run_id=nf_db.run_id, database=self.database)
+            nf_run = NextflowRunEntity.from_database(run_id=nf_db.run_id, database=self.database)
             nf_run.stop()
         return {'status': f"Nextflow runs for analysis_id={analysis_id} interrupted."}
 
