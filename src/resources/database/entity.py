@@ -1,7 +1,5 @@
-import json
 import os
 import time
-from typing import Optional
 
 from secretstorage.dhcrypto import Session
 from sqlalchemy import create_engine
@@ -33,10 +31,10 @@ class Database:
                                analysis_id=analysis_id,
                                time_created=time.time())
         with self.SessionLocal() as session:
-            session.add(analysis)
+            session.add(nf_run)
             session.commit()
-            session.refresh(analysis)
-        return analysis
+            session.refresh(nf_run)
+        return nf_run
 
     def get_nf_runs(self) -> list[NextflowRunDB]:
         with self.SessionLocal as session:

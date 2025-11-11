@@ -1,19 +1,12 @@
+import uuid
 import time
-from typing import Optional
 from pydantic import BaseModel
 
 from src.resources.database.entity import Database
 from src.resources.database.db_models import NextflowRunDB
 
 
-class NextflowRunEntity(BaseModel):
-    run_id: str
-    analysis_id: str
-    pipeline_name: str
-    run_args: list[str]
-    time_created: float = time.time()
-    time_updated: float = time.time()
-
+class NextflowRunEntity:
     def __init__(self,
                  analysis_id: str,
                  pipeline_name: str,
@@ -31,6 +24,8 @@ class NextflowRunEntity(BaseModel):
             self.analysis_id = nf_run.analysis_id
             self.pipeline_name = nf_run.pipeline_name
             self.run_args = nf_run.run_args
+        self.time_created: float = time.time()
+        self.time_updated: float = time.time()
 
     def start(self, database: Database) -> None:
         database.create_nf_run(self.run_id, self.analysis_id)
@@ -49,7 +44,7 @@ class NextflowRunEntity(BaseModel):
 
 
 def read_db_nf_run(nf_run: NextflowRunDB) -> NextflowRunEntity:
-    return NextflowRunEntity(nf_run.analysis_id)
+    return NextflowRunEntity(nf_run.analysis_id, nf_run.pipeline_name, nf_run.run_args)
 
 
 class CreateNextflowRun(BaseModel):

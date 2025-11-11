@@ -1,5 +1,8 @@
-from src.entities.nextflow_run_entity import NextflowRunEntity
+import os
 from kubernetes import client, config
+from fastapi import HTTPException
+
+from src.resources.nextflow_run.entity import NextflowRunEntity
 
 SERVICE_ACCOUNT  = os.getenv("NF_SERVICE_ACCOUNT", "nextflow-sa")
 PVC_NAME         = os.getenv("NF_PVC", "nextflow-work")
@@ -23,7 +26,7 @@ def create_nextflow_run(run: NextflowRunEntity, namespace: str = 'default') -> N
     ]
     if run.run_args:
         # Prevent shell injection by splitting params safely if you pass them as a single string
-        pieces.extend(run_args)
+        pieces.extend(run.run_args)
 
     command = " ".join(pieces)
 
@@ -37,13 +40,13 @@ def create_nextflow_run(run: NextflowRunEntity, namespace: str = 'default') -> N
         args=[f"""
                 set -Eeuo pipefail
                 notify() {{
-                    wget -qO- --header="X-Job-Name: ${JOB_NAME}" \
+                    wget -qO- --header="X-Job-Name: ${job_name}" \
                     --post-data "status=$1&node=${NODE_NAME}" \
                     https://example.com/webhook || true
                 }}
                 trap'notify fail' ERR
                 echo 'Nextflow:' && nextflow -version && \
-                echo 'Using config:' && cat {CONF_MOUNT_PATH}/{configmap_key} && \
+                echo 'Using config:' && cat {CONF_MOUNT_PATH}/{CONFIGMAP_KEY} && \
                 {command}
                 notify success 
             """],
@@ -65,13 +68,13 @@ def create_nextflow_run(run: NextflowRunEntity, namespace: str = 'default') -> N
             client.V1Volume(
                 name="work",
                 persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
-                    claim_name=pvc_name
+                    claim_name=PVC_NAME
                 ),
             ),
             client.V1Volume(
                 name="config",
                 config_map=client.V1ConfigMapVolumeSource(
-                    name=configmap_name,
+                    name=CONFIGMAP_NAME,
                     items=[client.V1KeyToPath(key=CONFIGMAP_KEY, path=CONFIGMAP_KEY)],
                 ),
             ),
@@ -92,6 +95,6 @@ def create_nextflow_run(run: NextflowRunEntity, namespace: str = 'default') -> N
 
     try:
         batch.create_namespaced_job(namespace=namespace, body=job)
-        return {"status": "submitted", "job": job_name, "namespace": NAMESPACE, "image": NF_IMAGE}
+        return {"status": "submitted", "job": job_name, "namespace": namespace, "image": NF_IMAGE}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
