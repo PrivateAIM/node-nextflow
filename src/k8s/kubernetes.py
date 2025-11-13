@@ -1,9 +1,12 @@
 import os
-from kubernetes import client, config
+from typing import Any
+from kubernetes import client
 from fastapi import HTTPException
 
 from src.resources.nextflow_run.entity import NextflowRunEntity
 
+
+# Load Nextflow Config from environment variables
 SERVICE_ACCOUNT  = os.getenv("NF_SERVICE_ACCOUNT", "nextflow-sa")
 PVC_NAME         = os.getenv("NF_PVC", "nextflow-work")
 NF_IMAGE         = os.getenv("NF_IMAGE", "nextflow/nextflow:24.10.0")
@@ -11,26 +14,11 @@ CONFIGMAP_NAME   = os.getenv("NF_CONFIGMAP", "nextflow-config")
 CONFIGMAP_KEY    = os.getenv("NF_CONFIGMAP_KEY", "nextflow.config")
 BACKOFF_LIMIT    = int(os.getenv("NF_BACKOFF_LIMIT", "0"))
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "flame-nextflow")+"/conclude"  # <-- set me
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "flame-nextflow") + "/conclude"  # <-- set me
                            # <-- kubectl apply -f secret below
 
-def load_cluster_config():
-    config.load_incluster_config()
 
-
-def get_current_namespace() -> str:
-    namespace_file = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
-    try:
-        with open(namespace_file, 'r') as file:
-            return file.read().strip()
-    # Handle the case where the file is not found
-    except FileNotFoundError:
-        # Fallback to a default namespace if the file is not found
-        return 'default'
-
-
-def create_nextflow_run(run: NextflowRunEntity, namespace: str = 'default') -> None:
-
+def create_nextflow_run(run: NextflowRunEntity, input_data: Any, namespace: str = 'default') -> None:
     batch = client.BatchV1Api()
 
     job_name = run.run_id
@@ -40,6 +28,7 @@ def create_nextflow_run(run: NextflowRunEntity, namespace: str = 'default') -> N
     pieces = [
         "nextflow", "run", run.pipeline_name,
         "-c", f"{conf_mount_path}/" + CONFIGMAP_KEY,
+        "--input_data", f"'{work_mount_path}/input'",
     ]
     if run.run_args:
         # Prevent shell injection by splitting params safely if you pass them as a single string
@@ -129,12 +118,13 @@ def create_nextflow_run(run: NextflowRunEntity, namespace: str = 'default') -> N
     job = client.V1Job(
         api_version="batch/v1",
         kind="Job",
-        metadata=client.V1ObjectMeta(name=job_name, namespace=namespace),
+        metadata=client.V1ObjectMeta(name=job_name,
+                                     labels={'app': job_name, 'component': "flame-analysis-nf"},
+                                     namespace=namespace),
         spec=job_spec,
     )
 
     try:
         batch.create_namespaced_job(namespace=namespace, body=job)
-        return {"status": "submitted", "job": job_name, "namespace": namespace, "image": NF_IMAGE}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

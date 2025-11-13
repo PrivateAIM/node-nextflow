@@ -1,6 +1,6 @@
 from dotenv import load_dotenv, find_dotenv
 
-from src.k8s.kubernetes import load_cluster_config, get_current_namespace
+from src.k8s.utils import load_cluster_config, get_current_namespace
 from src.resources.database.entity import Database
 from src.api.api import FlameNextflowAPI
 
