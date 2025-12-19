@@ -1,7 +1,5 @@
 import os
-import time
 
-from secretstorage.dhcrypto import Session
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

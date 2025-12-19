@@ -56,7 +56,11 @@ class NextflowRunEntity:
 
             # Execute Nextflow run command using input- and output_location [Step 4]
             try:
-                create_nextflow_run(run=self, input_data=input_data, namespace=get_current_namespace())
+                create_nextflow_run(input_data=input_data,
+                                    run_id=self.run_id,
+                                    pipeline_name=self.pipeline_name,
+                                    run_args=self.run_args,
+                                    namespace=get_current_namespace())
                 return {"status": "job submitted"}
             except HTTPException as e:
                 error_message = f"Exception during nextflow run creation with {str(self)}: {e}"

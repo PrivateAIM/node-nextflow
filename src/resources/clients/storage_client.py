@@ -23,10 +23,9 @@ class StorageClient:
         response = self.client.get(f"/local/{storage_id}")
         try:
             response.raise_for_status()
+            return pickle.loads(BytesIO(response.content).read())
         except HTTPStatusError as e:
             print("HTTP Error in result client during download:", repr(e))
-
-        return pickle.loads(BytesIO(response.content).read())
 
     def push_result(self, result: BytesIO) -> str:
         request_path = "/local/"
