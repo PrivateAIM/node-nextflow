@@ -34,12 +34,12 @@ class FlameNextflowAPI:
         router = APIRouter()
         router.add_api_route("/run",
                              self.run_call,
-                             dependencies=[Depends(valid_access_token)],
+                             #dependencies=[Depends(valid_access_token)],
                              methods=["POST"],
                              response_class=JSONResponse)
         router.add_api_route("/stop/{analysis_id}",
                              self.interrupt_call,
-                             dependencies=[Depends(valid_access_token)],
+                             #dependencies=[Depends(valid_access_token)],
                              methods=["POST"],
                              response_class=JSONResponse)
         router.add_api_route("/conclude",

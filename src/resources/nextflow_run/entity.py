@@ -1,14 +1,10 @@
-import os
 import uuid
 import time
 from typing import Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel
-from io import BytesIO
 
-from src.resources.clients.analysis_client import AnalysisClient
-from src.resources.clients.storage_client import StorageClient
 from src.resources.database.entity import Database
 from src.k8s.kubernetes import create_nextflow_run
 from src.k8s.utils import get_current_namespace, delete_k8s_resource
@@ -50,18 +46,18 @@ class NextflowRunEntity:
                                    self.analysis_id,
                                    self.keycloak_token,
                                    self.time_created)
-            # Retrieve and delete data from StorageClient [Step 3]
-            storage_client = StorageClient(self.keycloak_token)
-            input_data = storage_client.retrieve_data(input_location)
 
-            # Execute Nextflow run command using input- and output_location [Step 4]
+            # TODO: Retrieve input data from StorageClient [Step 2-3]
+            # storage_client = StorageClient(self.keycloak_token)
+            # input_data = storage_client.retrieve_data(input_location)
+
+            # Execute Nextflow run command [Step 4]
             try:
-                create_nextflow_run(input_data=input_data,
-                                    run_id=self.run_id,
+                create_nextflow_run(run_id=self.run_id,
                                     pipeline_name=self.pipeline_name,
                                     run_args=self.run_args,
                                     namespace=get_current_namespace())
-                return {"status": "job submitted"}
+                return {"status": "job submitted", "run_id": self.run_id}
             except HTTPException as e:
                 error_message = f"Exception during nextflow run creation with {str(self)}: {e}"
                 print(error_message)
@@ -76,20 +72,18 @@ class NextflowRunEntity:
         delete_k8s_resource(name=self.run_id, resource_type='job', namespace=get_current_namespace())
 
     def conclude(self, run_status: str, storage_location: str) -> None:
-        storage_client = StorageClient(self.keycloak_token)
-        analysis_client = AnalysisClient(self.analysis_id)
+        print(f"Concluding run {self.run_id}: status={run_status}, location={storage_location}")
 
-        # If successful, create result_storage with StorageClient using storage_location  [Step 7]
-        storage_id = None
-        if run_status != 'success':
-            with open(storage_location, 'rb') as result_file:
-                storage_id = storage_client.push_result(BytesIO(result_file.read()))
+        # TODO: Step 7 - Wrap result files in tar & move to analysis project folder in MinIO
+        # TODO: Step 8 - Inform analysis via AnalysisClient
+        # TODO: Step 9 - Move result to global storage or load to analysis via Kong
 
-        # Inform analysis via AnalysisClient about conclusion (deliver result_storage id, if successful)  [Step 8]
-        analysis_client.inform_analysis({"run_status": run_status, "storage_id": storage_id})
-        # Cleanup Nextflow Run and shared PVC [Step 10] # TODO: Consider every run gets its own PVC with resource limits that is created/deleted per run
-        self.stop()
-        os.remove(storage_location)
+        # TODO: re-enable cleanup after debugging
+        # For now, keep the job around so we can inspect logs
+        # try:
+        #     self.stop()
+        # except Exception as e:
+        #     print(f"Warning: cleanup failed for {self.run_id}: {e}")
 
 
 class CreateNextflowRun(BaseModel):

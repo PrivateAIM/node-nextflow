@@ -5,18 +5,19 @@ from fastapi import HTTPException
 
 
 # Load Nextflow Config from environment variables
-SERVICE_ACCOUNT  = os.getenv("NF_SERVICE_ACCOUNT", "nextflow-sa")
-PVC_NAME         = os.getenv("NF_PVC", "nextflow-pvc")
-NF_IMAGE         = os.getenv("NF_IMAGE", "nextflow/nextflow:24.10.0")
-CONFIGMAP_NAME   = os.getenv("NF_CONFIGMAP", "nextflow-config")
-CONFIGMAP_KEY    = os.getenv("NF_CONFIGMAP_KEY", "nextflow.config")
-BACKOFF_LIMIT    = int(os.getenv("NF_BACKOFF_LIMIT", "0"))
+SERVICE_ACCOUNT   = os.getenv("NF_SERVICE_ACCOUNT", "nextflow-sa")
+NF_IMAGE          = os.getenv("NF_IMAGE", "nextflow/nextflow:25.04.3")
+CONFIGMAP_NAME    = os.getenv("NF_CONFIGMAP", "nextflow-config")
+CONFIGMAP_KEY     = os.getenv("NF_CONFIGMAP_KEY", "nextflow.config")
+BACKOFF_LIMIT     = int(os.getenv("NF_BACKOFF_LIMIT", "0"))
+MINIO_BUCKET      = os.getenv("NF_MINIO_BUCKET", "flame")
+MINIO_PREFIX      = os.getenv("NF_MINIO_PREFIX", "Nextflow")
+MINIO_SECRET_NAME = os.getenv("NF_MINIO_SECRET", "minio-credentials")
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "nextflow-service:8000") + "/nextflow/conclude"  # <-- set me
-                           # <-- kubectl apply -f secret below
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://nextflow-service:8000") + "/nextflow/conclude"
 
 
-def create_nextflow_run(input_data: Any,
+def create_nextflow_run(#input_data: Any,
                         run_id: str,
                         pipeline_name: Optional[str] = None,
                         run_args: Optional[list[str]] = None,
@@ -24,11 +25,9 @@ def create_nextflow_run(input_data: Any,
     batch = client.BatchV1Api()
 
     job_name = run_id
-    # Mount PVC at /workspace to match Nextflow config expectations
-    work_mount_path = "/workspace"
     conf_mount_path = "/conf"
-    # Use run-specific subdirectories within /workspace
-    run_work_dir = f"{work_mount_path}/{run_id}"
+    # Work dir lives in MinIO under the shared prefix, scoped per run
+    run_work_dir = f"s3://{MINIO_BUCKET}/{MINIO_PREFIX}/{run_id}"
 
     # Build the nextflow command
     pieces = [
@@ -38,8 +37,8 @@ def create_nextflow_run(input_data: Any,
     ]
 
     # Add input_data parameter if needed by the pipeline
-    if input_data:
-        pieces.extend(["--input_data", f"'{run_work_dir}/input'"])
+    #if input_data:
+    #    pieces.extend(["--input_data", f"'{run_work_dir}/input'"])
 
     if run_args:
         # Prevent shell injection by splitting params safely if you pass them as a single string
@@ -89,16 +88,37 @@ def create_nextflow_run(input_data: Any,
         command=["/bin/bash", "-lc"],
         args=[notify_wrapper],
         env=[
-            client.V1EnvVar(name="NXF_HOME", value=f"{run_work_dir}/.nextflow"),
+            client.V1EnvVar(name="NXF_JVM_ARGS", value="-Xms1g -Xmx7g"),  # cap JVM heap
+            client.V1EnvVar(name="NXF_HOME", value="/tmp/.nextflow"),  # ephemeral local dir
             client.V1EnvVar(name="NXF_WORK", value=f"{run_work_dir}/work"),
             client.V1EnvVar(name="RUN_ID", value=run_id),
             client.V1EnvVar(name="WEBHOOK_URL", value=WEBHOOK_URL),
             client.V1EnvVar(name="STORAGE_LOCATION", value=run_work_dir),
+            # MinIO credentials injected from Kubernetes secret
+            client.V1EnvVar(
+                name="AWS_ACCESS_KEY_ID",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name=MINIO_SECRET_NAME, key="access-key"
+                    )
+                ),
+            ),
+            client.V1EnvVar(
+                name="AWS_SECRET_ACCESS_KEY",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name=MINIO_SECRET_NAME, key="secret-key"
+                    )
+                ),
+            ),
         ],
         volume_mounts=[
-            client.V1VolumeMount(name="work", mount_path=work_mount_path),
             client.V1VolumeMount(name="config", mount_path=conf_mount_path),
         ],
+        resources=client.V1ResourceRequirements(
+            requests={"cpu": "500m", "memory": "4Gi"},
+            limits={"cpu": "1", "memory": "8Gi"},
+        ),
     )
 
     pod_spec = client.V1PodSpec(
@@ -106,12 +126,6 @@ def create_nextflow_run(input_data: Any,
         restart_policy="Never",
         containers=[container],
         volumes=[
-            client.V1Volume(
-                name="work",
-                persistent_volume_claim=client.V1PersistentVolumeClaimVolumeSource(
-                    claim_name=PVC_NAME
-                ),
-            ),
             client.V1Volume(
                 name="config",
                 config_map=client.V1ConfigMapVolumeSource(

@@ -40,25 +40,25 @@ class Database:
         return nf_run
 
     def get_nf_runs(self) -> list[NextflowRunDB]:
-        with self.SessionLocal as session:
+        with self.SessionLocal() as session:
             return session.query(NextflowRunDB).all()
 
     def get_nf_runs_by_analysis_id(self, analysis_id: str) -> list[NextflowRunDB]:
-        with self.SessionLocal as session:
+        with self.SessionLocal() as session:
             return session.query(NextflowRunDB).filter_by(**{"analysis_id": analysis_id}).all()
 
     def get_nf_run_by_run_id(self, run_id: str) -> NextflowRunDB:
-        with self.SessionLocal as session:
+        with self.SessionLocal() as session:
             return session.query(NextflowRunDB).filter_by(**{"run_id": run_id}).first()
 
     def delete_nf_run(self, run_id: str) -> None:
-        with self.SessionLocal as session:
+        with self.SessionLocal() as session:
             run = session.query(NextflowRunDB).filter_by(**{"run_id": run_id}).one()
             session.delete(run)
             session.commit()
 
     def delete_all_analysis_nf_runs(self, analysis_id: str):
-        with self.SessionLocal as session:
+        with self.SessionLocal() as session:
             runs = session.query(NextflowRunDB).filter_by(**{"analysis_id": analysis_id}).all()
             for run in runs:
                 session.delete(run)
