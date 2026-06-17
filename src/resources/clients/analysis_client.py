@@ -16,6 +16,13 @@ class AnalysisClient:
         self.client = Client(base_url=f"http://{analysis_nginx_client_base_url}:80/analysis",
                              follow_redirects=True)
 
+    def get_project_id(self) -> str:
+        # TODO: confirm exact path on analysis nginx — GET /analysis/ assumed
+        # to return {"project_id": "<id>", ...}
+        response = self.client.get("/")
+        response.raise_for_status()
+        return response.json()["project_id"]
+
     def inform_analysis(self, result: dict) -> dict:
         response = self.client.post(f"/nextflow",
                                     json=result,

@@ -145,6 +145,28 @@ spec:
             value: "minio-credentials"
           - name: WEBHOOK_URL
             value: "http://nextflow-service:8000"
+          # Kong's auth plugin matches/strips KONG_MINIO_PATH_PREFIX before
+          # forwarding to MinIO upstream. Sign against BASE_URL only; the
+          # prefix is added unsigned, so MinIO sees a canonical request that
+          # matches the SigV4 signature.
+          - name: KONG_MINIO_BASE_URL
+            value: "https://kong.example.org"          # TODO: set to actual Kong host
+          - name: KONG_MINIO_PATH_PREFIX
+            value: "/minio"                            # TODO: empty if Kong does not strip a prefix
+          - name: KONG_PRESIGN_TTL_SECONDS
+            value: "86400"
+          - name: INTERNAL_MINIO_ENDPOINT
+            value: "http://flame-node-minio:9000"
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: minio-credentials
+                key: AWS_ACCESS_KEY_ID
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: minio-credentials
+                key: AWS_SECRET_ACCESS_KEY
         ports:
         - containerPort: 8000
 ---
