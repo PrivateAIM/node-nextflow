@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: nf-api-sa
-  namespace: nextflow
+  namespace: default
 
 ---
 # RBAC so the API can create/list Jobs and inspect Pods/logs/events if needed
@@ -10,7 +10,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: nf-api-role
-  namespace: nextflow
+  namespace: default
 rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
@@ -27,11 +27,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: nf-api-rb
-  namespace: nextflow
+  namespace: default
 subjects:
   - kind: ServiceAccount
     name: nf-api-sa
-    namespace: nextflow
+    namespace: default
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -42,7 +42,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nextflow-launcher
-  namespace: nextflow
+  namespace: default
 spec:
   replicas: 1
   selector:
@@ -104,7 +104,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: nextflow-launcher
-  namespace: nextflow
+  namespace: default
 spec:
   selector:
     app: nextflow-launcher
@@ -120,7 +120,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-same-namespace
-  namespace: nextflow
+  namespace: default
 spec:
   podSelector:
     matchLabels:
