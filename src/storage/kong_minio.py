@@ -75,8 +75,8 @@ class KongMinioPresigner:
                                 kong_apikey: str) -> 'KongMinioPresigner':
         namespace = get_current_namespace()
         secret_name = f"minio-project-{project_id}"
-        access_key = _read_k8s_secret(secret_name, "AWS_ACCESS_KEY_ID", namespace)
-        secret_key = _read_k8s_secret(secret_name, "AWS_SECRET_ACCESS_KEY", namespace)
+        access_key = _read_k8s_secret(secret_name, "admin_access_key_id", namespace)
+        secret_key = _read_k8s_secret(secret_name, "admin_secret_access_key", namespace)
         return cls(
             base_url=base_url,
             path_prefix=path_prefix,
