@@ -99,7 +99,7 @@ def create_nextflow_run(#input_data: Any,
                 name="AWS_ACCESS_KEY_ID",
                 value_from=client.V1EnvVarSource(
                     secret_key_ref=client.V1SecretKeySelector(
-                        name=MINIO_SECRET_NAME, key="read_access_key_id"
+                        name=MINIO_SECRET_NAME, key="admin_access_key_id"
                     )
                 ),
             ),
@@ -107,7 +107,7 @@ def create_nextflow_run(#input_data: Any,
                 name="AWS_SECRET_ACCESS_KEY",
                 value_from=client.V1EnvVarSource(
                     secret_key_ref=client.V1SecretKeySelector(
-                        name=MINIO_SECRET_NAME, key="read_secret_access_key"
+                        name=MINIO_SECRET_NAME, key="admin_secret_access_key"
                     )
                 ),
             ),
