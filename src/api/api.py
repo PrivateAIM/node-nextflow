@@ -61,6 +61,7 @@ class FlameNextflowAPI:
 
     def run_call(self, body: CreateNextflowRun):
         nf_run = NextflowRunEntity(analysis_id=body.analysis_id,
+                                   project_id=body.project_id,
                                    pipeline_name=body.pipeline_name,
                                    run_args=body.run_args,
                                    keycloak_token=body.keycloak_token)

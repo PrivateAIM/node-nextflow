@@ -24,12 +24,14 @@ class InputRef(BaseModel):
 class NextflowRunEntity:
     def __init__(self,
                  analysis_id: str,
+                 project_id: str, #TODO
                  keycloak_token: str,
                  pipeline_name: Optional[str] = None,
                  run_args: Optional[list[str]] = None,
                  run_id: Optional[str] = None,
                  time_created: Optional[float] = None) -> None:
         self.analysis_id = analysis_id
+        self.project_id = project_id #TODO
         self.pipeline_name = pipeline_name
         self.run_args = run_args
         self.keycloak_token = keycloak_token
@@ -62,7 +64,8 @@ class NextflowRunEntity:
                         status_code=400,
                         detail="kong_apikey is required in the request body when inputs are provided",
                     )
-                project_id = self._get_project_id()
+                #project_id = self._get_project_id()
+                project_id = self.project_id  # TODO
                 self._authorize_inputs(inputs, project_id)
                 presigner = KongMinioPresigner.from_k8s_project_secret(
                     base_url=config.get_kong_minio_base_url(),
@@ -156,6 +159,7 @@ class NextflowRunEntity:
 
 class CreateNextflowRun(BaseModel):
     analysis_id: str = 'analysis_id'
+    project_id: str = 'project_id'
     pipeline_name: str = 'pipeline_name'
     run_args: list[str] = []
     keycloak_token: str = 'keycloak_token'

@@ -17,7 +17,10 @@ class Base:
 class NextflowRunDB(Base):
     __tablename__ = "nextflow_runs"
     id = Column(Integer, primary_key=True, index=True)
-    run_id = Column(String, unique=True, index=True)
     analysis_id = Column(String, unique=False, index=True)
+    #project_id = Column(String, unique=False, index=True)
     keycloak_token =  Column(String, unique=False, nullable=True)
+    #pipeline_name = Column(String, unique=False, index=True)
+    #run_args = Column(JSON, unique=False, nullable=True)
+    run_id = Column(String, unique=True, index=True)
     time_created = Column(Float, nullable=True)

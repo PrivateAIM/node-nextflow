@@ -14,7 +14,7 @@ MINIO_BUCKET      = os.getenv("NF_MINIO_BUCKET", "flame")
 MINIO_PREFIX      = os.getenv("NF_MINIO_PREFIX", "Nextflow")
 MINIO_SECRET_NAME = os.getenv("NF_MINIO_SECRET", "node1-seaweedfs-s3-secret")
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://nextflow-service:8000") + "/nextflow/conclude"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://nextflow-launcher:8000") + "/nextflow/conclude"
 
 
 def create_nextflow_run(#input_data: Any,
