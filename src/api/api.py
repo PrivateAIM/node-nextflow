@@ -65,7 +65,7 @@ class FlameNextflowAPI:
                                    pipeline_name=body.pipeline_name,
                                    run_args=body.run_args,
                                    keycloak_token=body.keycloak_token)
-        return nf_run.start(self.database, body.inputs, body.kong_apikey)
+        return nf_run.start(self.database, body.inputs, body.kong_apikey, body.kong_datastore)
 
     def conclude_call(self, body: ConcludeNextflowRun):
         nf_run = NextflowRunEntity.from_database(run_id=body.run_id, database=self.database)

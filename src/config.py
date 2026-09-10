@@ -8,16 +8,9 @@ def _require(name: str) -> str:
     return value
 
 
-def get_kong_minio_base_url() -> str:
-    return _require("KONG_MINIO_BASE_URL")
-
-
-def get_kong_minio_path_prefix() -> str:
-    return os.getenv("KONG_MINIO_PATH_PREFIX", "")
-
-
-def get_kong_presign_ttl() -> int:
-    return int(os.getenv("KONG_PRESIGN_TTL_SECONDS", "86400"))
+def get_kong_base_url() -> str:
+    # Public Kong proxy the launcher and the worker pods can both reach.
+    return _require("KONG_BASE_URL").rstrip("/")
 
 
 def get_internal_minio_endpoint() -> str:

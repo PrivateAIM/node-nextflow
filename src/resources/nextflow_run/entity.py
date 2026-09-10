@@ -10,12 +10,11 @@ from src.resources.clients.analysis_client import AnalysisClient
 from src.resources.database.entity import Database
 from src.k8s.kubernetes import create_nextflow_run
 from src.k8s.utils import get_current_namespace, delete_k8s_resource
-from src.storage.kong_minio import KongMinioPresigner, rewrite_samplesheet
+from src.storage.kong_inputs import build_object_url, fetch_object, rewrite_samplesheet
 from src.storage.internal_minio import InternalMinioClient
 
 
 class InputRef(BaseModel):
-    bucket: str
     key: str
     param_name: str
     samplesheet: bool = False
@@ -54,26 +53,33 @@ class NextflowRunEntity:
                 f"run_id={self.run_id})")
 
     def start(self, database: Database, inputs: list[InputRef] | None = None,
-              kong_apikey: str | None = None) -> dict[str, str]:
+              kong_apikey: str | None = None,
+              kong_datastore: str | None = None) -> dict[str, str]:
         if None not in [self.pipeline_name, self.run_args]:
             effective_run_args = list(self.run_args)
 
             if inputs:
+                # The launcher signs nothing: Kong's key-auth authenticates the
+                # apikey, its acl plugin enforces project isolation, and the
+                # minio-gateway plugin signs the upstream request. Both values
+                # come from the caller, which provisioned them via the hub
+                # adapter (the datastore's Kong service name is admin-chosen, so
+                # it cannot be derived from project_id).
                 if not kong_apikey:
                     raise HTTPException(
                         status_code=400,
                         detail="kong_apikey is required in the request body when inputs are provided",
                     )
-                #project_id = self._get_project_id()
-                project_id = self.project_id  # TODO
-                self._authorize_inputs(inputs, project_id)
-                presigner = KongMinioPresigner.from_k8s_project_secret(
-                    base_url=config.get_kong_minio_base_url(),
-                    path_prefix=config.get_kong_minio_path_prefix(),
-                    project_id=project_id,
-                    kong_apikey=kong_apikey,
-                )
-                ttl = config.get_kong_presign_ttl()
+                if not kong_datastore:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="kong_datastore is required in the request body when inputs are provided",
+                    )
+                kong_base_url = config.get_kong_base_url()
+
+                def make_url(key: str) -> str:
+                    return build_object_url(kong_base_url, kong_datastore, key, kong_apikey)
+
                 internal: InternalMinioClient | None = None
                 for inp in inputs:
                     if inp.samplesheet:
@@ -83,12 +89,9 @@ class NextflowRunEntity:
                                 access_key=config.get_internal_minio_access_key(),
                                 secret_key=config.get_internal_minio_secret_key(),
                             )
-                        csv_bytes = presigner.fetch(inp.bucket, inp.key, ttl)
-                        rewritten = rewrite_samplesheet(
-                            csv_bytes,
-                            bucket=inp.bucket,
-                            presign=lambda b, k: presigner.presign_get(b, k, ttl),
-                        )
+                        csv_bytes = fetch_object(kong_base_url, kong_datastore,
+                                                 inp.key, kong_apikey)
+                        rewritten = rewrite_samplesheet(csv_bytes, make_url=make_url)
                         basename = inp.key.rsplit("/", 1)[-1]
                         internal_key = (
                             f"{config.get_internal_minio_prefix()}/{self.run_id}/inputs/{basename}"
@@ -98,8 +101,7 @@ class NextflowRunEntity:
                         )
                         effective_run_args.extend([f"--{inp.param_name}", uri])
                     else:
-                        url = presigner.presign_get(inp.bucket, inp.key, ttl)
-                        effective_run_args.extend([f"--{inp.param_name}", url])
+                        effective_run_args.extend([f"--{inp.param_name}", make_url(inp.key)])
 
             database.create_nf_run(self.run_id,
                                    self.analysis_id,
@@ -124,20 +126,6 @@ class NextflowRunEntity:
     def _get_project_id(self) -> str:
         analysis_client = AnalysisClient(self.analysis_id)
         return analysis_client.get_project_id()
-
-    def _authorize_inputs(self, inputs: list[InputRef], project_id: str) -> None:
-        # Convention: keys are namespaced by project under a shared bucket. The
-        # real enforcement lives in MinIO IAM (the per-project credentials);
-        # this is a fail-fast guard so cross-project requests don't reach Kong.
-        expected = f"{project_id}/"
-        for inp in inputs:
-            if not inp.key.startswith(expected):
-                raise HTTPException(
-                    status_code=403,
-                    detail=(
-                        f"Input key '{inp.key}' is not within project prefix '{expected}'"
-                    ),
-                )
 
     def stop(self) -> None:
         delete_k8s_resource(name=self.run_id, resource_type='job', namespace=get_current_namespace())
@@ -165,6 +153,7 @@ class CreateNextflowRun(BaseModel):
     keycloak_token: str = 'keycloak_token'
     inputs: list[InputRef] = []
     kong_apikey: Optional[str] = None
+    kong_datastore: Optional[str] = None
 
 
 class ConcludeNextflowRun(BaseModel):
