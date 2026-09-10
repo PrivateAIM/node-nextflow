@@ -23,14 +23,14 @@ class InputRef(BaseModel):
 class NextflowRunEntity:
     def __init__(self,
                  analysis_id: str,
-                 project_id: str, #TODO
+                 #project_id: str, #TODO
                  keycloak_token: str,
                  pipeline_name: Optional[str] = None,
                  run_args: Optional[list[str]] = None,
                  run_id: Optional[str] = None,
                  time_created: Optional[float] = None) -> None:
         self.analysis_id = analysis_id
-        self.project_id = project_id #TODO
+        #self.project_id = project_id #TODO
         self.pipeline_name = pipeline_name
         self.run_args = run_args
         self.keycloak_token = keycloak_token
