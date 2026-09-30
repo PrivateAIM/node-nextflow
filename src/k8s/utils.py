@@ -56,17 +56,14 @@ def find_k8s_resources(resource_type: str,
         return None
     else:
         resource_names = [resource.metadata.name for resource in resources.items]
+        if manual_name_selector is not None:
+            resource_names = [name for name in resource_names if manual_name_selector in name]
         if len(resource_names) > 1:
-            if manual_name_selector is not None:
-                resource_names = [name for name in resource_names if manual_name_selector in name]
-                return resource_names if len(resource_names) > 1 else resource_names[0]
-            else:
-                return resource_names
+            return resource_names
+        elif len(resource_names) == 1:
+            return resource_names[0]
         else:
-            if len(resource_names) == 1:
-                return resource_names[0]
-            else:
-                return None
+            return None
 
 
 def delete_k8s_resource(name: str, resource_type: str, namespace: str = 'default') -> None:

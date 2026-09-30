@@ -10,6 +10,8 @@ class AnalysisClient:
                                                             f"component=flame-analysis-nginx",
                                                             manual_name_selector=analysis_id,
                                                             namespace=get_current_namespace())
+        if analysis_nginx_client_base_url is None:
+            raise LookupError(f"No nginx service found for analysis {analysis_id}")
         if type(analysis_nginx_client_base_url) == list:
             analysis_nginx_client_base_url = self._find_latest_url(analysis_nginx_client_base_url)
 
@@ -31,8 +33,12 @@ class AnalysisClient:
             response.raise_for_status()
         except HTTPStatusError as e:
             print("HTTP Error in analysis client:", repr(e))
+            raise
 
-        return response.json()
+        try:
+            return response.json()
+        except ValueError:
+            return {}
 
     def _find_latest_url(self, urls: list[str]) -> str:
         nginx_url = ""
@@ -40,5 +46,6 @@ class AnalysisClient:
         for url in urls:
             count = int(url.rsplit('-', 1)[-1])
             if count > latest_count:
+                latest_count = count
                 nginx_url = url
         return nginx_url

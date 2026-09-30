@@ -1,6 +1,8 @@
 import uvicorn
 
-from fastapi import APIRouter, FastAPI, Depends
+from typing import Optional
+
+from fastapi import APIRouter, FastAPI, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -59,8 +61,11 @@ class FlameNextflowAPI:
 
         uvicorn.run(app, host="0.0.0.0", port=8000)
 
-    def run_call(self, body: CreateNextflowRun):
-        nf_run = NextflowRunEntity(analysis_id=body.analysis_id,
+    def run_call(self, body: CreateNextflowRun, x_flame_analysis_id: Optional[str] = Header(None)):
+        # Calls from an analysis pass its nginx sidecar, which sets this header from the analysis config
+        # and overwrites any client value, so it takes precedence over the self-reported body field.
+        analysis_id = x_flame_analysis_id or body.analysis_id
+        nf_run = NextflowRunEntity(analysis_id=analysis_id,
                                    #project_id=body.project_id,
                                    pipeline_name=body.pipeline_name,
                                    run_args=body.run_args,

@@ -56,7 +56,9 @@ class NextflowRunEntity:
               kong_apikey: str | None = None,
               kong_datastore: str | None = None) -> dict[str, str]:
         if None not in [self.pipeline_name, self.run_args]:
-            effective_run_args = list(self.run_args)
+            # "{run_id}" lets callers point outputs at a per-run location they cannot know beforehand,
+            # e.g. --outdir s3://flame/Nextflow/{run_id}/results
+            effective_run_args = [arg.replace("{run_id}", self.run_id) for arg in self.run_args]
 
             if inputs:
                 # The launcher signs nothing: Kong's key-auth authenticates the
@@ -134,8 +136,17 @@ class NextflowRunEntity:
         print(f"Concluding run {self.run_id}: status={run_status}, location={storage_location}")
 
         # TODO: Step 7 - Wrap result files in tar & move to analysis project folder in MinIO
-        # TODO: Step 8 - Inform analysis via AnalysisClient
         # TODO: Step 9 - Move result to global storage or load to analysis via Kong
+
+        # Tell the analysis (POST /analysis/nextflow on its nginx sidecar, allowed from this pod only).
+        # A failure must not fail the Job's webhook: it would retry and inform the analysis again.
+        try:
+            AnalysisClient(self.analysis_id).inform_analysis({"run_id": self.run_id,
+                                                              "run_status": run_status,
+                                                              "storage_location": storage_location})
+            print(f"Informed analysis {self.analysis_id} about run {self.run_id}")
+        except Exception as e:
+            print(f"Warning: could not inform analysis {self.analysis_id} about run {self.run_id}: {e!r}")
 
         # TODO: re-enable cleanup after debugging
         # For now, keep the job around so we can inspect logs
