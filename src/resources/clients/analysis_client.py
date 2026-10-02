@@ -1,51 +1,19 @@
-from httpx import Client, HTTPStatusError
+from httpx import Client
 
-from src.k8s.utils import find_k8s_resources, get_current_namespace
+from src.k8s.utils import find_service_names, get_current_namespace
 
 
 class AnalysisClient:
+    """Talks to an analysis through its nginx sidecar."""
+
     def __init__(self, analysis_id: str) -> None:
-        analysis_nginx_client_base_url = find_k8s_resources('service',
-                                                            'label',
-                                                            f"component=flame-analysis-nginx",
-                                                            manual_name_selector=analysis_id,
-                                                            namespace=get_current_namespace())
-        if analysis_nginx_client_base_url is None:
+        names = [name for name in find_service_names("component=flame-analysis-nginx", get_current_namespace())
+                 if analysis_id in name]
+        if not names:
             raise LookupError(f"No nginx service found for analysis {analysis_id}")
-        if type(analysis_nginx_client_base_url) == list:
-            analysis_nginx_client_base_url = self._find_latest_url(analysis_nginx_client_base_url)
+        # a restarted analysis gets a new service with a higher trailing counter
+        latest = max(names, key=lambda name: int(name.rsplit("-", 1)[-1]))
+        self.client = Client(base_url=f"http://{latest}:80/analysis", follow_redirects=True)
 
-        self.client = Client(base_url=f"http://{analysis_nginx_client_base_url}:80/analysis",
-                             follow_redirects=True)
-
-    def get_project_id(self) -> str:
-        # TODO: confirm exact path on analysis nginx — GET /analysis/ assumed
-        # to return {"project_id": "<id>", ...}
-        response = self.client.get("/")
-        response.raise_for_status()
-        return response.json()["project_id"]
-
-    def inform_analysis(self, result: dict) -> dict:
-        response = self.client.post(f"/nextflow",
-                                    json=result,
-                                    headers={"Content-Type": "application/json"})
-        try:
-            response.raise_for_status()
-        except HTTPStatusError as e:
-            print("HTTP Error in analysis client:", repr(e))
-            raise
-
-        try:
-            return response.json()
-        except ValueError:
-            return {}
-
-    def _find_latest_url(self, urls: list[str]) -> str:
-        nginx_url = ""
-        latest_count = -1
-        for url in urls:
-            count = int(url.rsplit('-', 1)[-1])
-            if count > latest_count:
-                latest_count = count
-                nginx_url = url
-        return nginx_url
+    def inform_analysis(self, result: dict) -> None:
+        self.client.post("/nextflow", json=result).raise_for_status()

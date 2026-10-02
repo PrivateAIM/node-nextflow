@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from .db_models import Base, NextflowRunDB
@@ -8,58 +8,50 @@ from .db_models import Base, NextflowRunDB
 
 class Database:
     def __init__(self) -> None:
-        host = os.getenv('POSTGRES_HOST')
-        port = "5432"
-        user = os.getenv('POSTGRES_USER')
-        password = os.getenv('POSTGRES_PASSWORD')
-        database = os.getenv('POSTGRES_DB')
-        conn_uri = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
-        self.engine = create_engine(conn_uri,
-                                    pool_pre_ping=True,
-                                    pool_recycle=3600)
+        conn_uri = (f"postgresql+psycopg2://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
+                    f"@{os.getenv('POSTGRES_HOST')}:5432/{os.getenv('POSTGRES_DB')}")
+        self.engine = create_engine(conn_uri, pool_pre_ping=True, pool_recycle=3600)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         Base.metadata.create_all(bind=self.engine)
+        self._add_missing_columns()
 
-    def reset_db(self) -> None:
-        Base.metadata.drop_all(bind=self.engine)
-        Base.metadata.create_all(bind=self.engine)
+    def _add_missing_columns(self) -> None:
+        """create_all does not alter existing tables; add the result-handling columns to older databases."""
+        with self.engine.begin() as conn:
+            for column in ("run_status VARCHAR", "manifest JSON", "forward_spec JSON", "forward_state JSON"):
+                conn.execute(text(f"ALTER TABLE nextflow_runs ADD COLUMN IF NOT EXISTS {column}"))
 
     def create_nf_run(self,
                       run_id: str,
                       analysis_id: str,
                       keycloak_token: str,
-                      time_created: float) -> NextflowRunDB:
+                      time_created: float,
+                      forward_spec: dict | None = None) -> NextflowRunDB:
         nf_run = NextflowRunDB(run_id=run_id,
                                analysis_id=analysis_id,
                                keycloak_token=keycloak_token,
-                               time_created=time_created)
+                               time_created=time_created,
+                               forward_spec=forward_spec)
         with self.SessionLocal() as session:
             session.add(nf_run)
             session.commit()
             session.refresh(nf_run)
         return nf_run
 
-    def get_nf_runs(self) -> list[NextflowRunDB]:
+    def get_nf_run_by_run_id(self, run_id: str) -> NextflowRunDB | None:
         with self.SessionLocal() as session:
-            return session.query(NextflowRunDB).all()
+            return session.query(NextflowRunDB).filter_by(run_id=run_id).first()
 
     def get_nf_runs_by_analysis_id(self, analysis_id: str) -> list[NextflowRunDB]:
         with self.SessionLocal() as session:
-            return session.query(NextflowRunDB).filter_by(**{"analysis_id": analysis_id}).all()
+            return session.query(NextflowRunDB).filter_by(analysis_id=analysis_id).all()
 
-    def get_nf_run_by_run_id(self, run_id: str) -> NextflowRunDB:
+    def get_nf_runs_with_forward_status(self, status: str) -> list[NextflowRunDB]:
         with self.SessionLocal() as session:
-            return session.query(NextflowRunDB).filter_by(**{"run_id": run_id}).first()
+            rows = session.query(NextflowRunDB).filter(NextflowRunDB.forward_state.isnot(None)).all()
+        return [row for row in rows if row.forward_state.get("status") == status]
 
-    def delete_nf_run(self, run_id: str) -> None:
+    def update_nf_run(self, run_id: str, **fields) -> None:
         with self.SessionLocal() as session:
-            run = session.query(NextflowRunDB).filter_by(**{"run_id": run_id}).one()
-            session.delete(run)
+            session.query(NextflowRunDB).filter_by(run_id=run_id).update(fields)
             session.commit()
-
-    def delete_all_analysis_nf_runs(self, analysis_id: str):
-        with self.SessionLocal() as session:
-            runs = session.query(NextflowRunDB).filter_by(**{"analysis_id": analysis_id}).all()
-            for run in runs:
-                session.delete(run)
-                session.commit()

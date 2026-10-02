@@ -1,26 +1,20 @@
-from typing import Any
-from sqlalchemy import JSON, Column, Integer, String, Float
-from sqlalchemy.ext.declarative import as_declarative, declared_attr
+from sqlalchemy import JSON, Column, Float, Integer, String
+from sqlalchemy.orm import DeclarativeBase
 
 
-@as_declarative()
-class Base:
-    id: Any
-    __name__: str
-
-    # Generate __tablename__ automatically
-    @declared_attr
-    def __tablename__(cls) -> str:
-        return cls.__name__.lower()
+class Base(DeclarativeBase):
+    pass
 
 
 class NextflowRunDB(Base):
     __tablename__ = "nextflow_runs"
     id = Column(Integer, primary_key=True, index=True)
-    analysis_id = Column(String, unique=False, index=True)
-    #project_id = Column(String, unique=False, index=True)
-    keycloak_token =  Column(String, unique=False, nullable=True)
-    #pipeline_name = Column(String, unique=False, index=True)
-    #run_args = Column(JSON, unique=False, nullable=True)
+    analysis_id = Column(String, index=True)
+    keycloak_token = Column(String, nullable=True)
     run_id = Column(String, unique=True, index=True)
     time_created = Column(Float, nullable=True)
+    # result handling (docs/result-handling-plan.md)
+    run_status = Column(String, nullable=True)
+    manifest = Column(JSON, nullable=True)       # [{key, size, etag}] below results/
+    forward_spec = Column(JSON, nullable=True)   # the `forward` block of the /run call
+    forward_state = Column(JSON, nullable=True)  # transfer progress / outcome, see storage/forward.py
